@@ -8,7 +8,7 @@ use std::fmt;
 pub const BOARDSIZE: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Player {
+pub enum Player {
     Black,
     White,
     Empty,
@@ -108,7 +108,7 @@ impl State {
     }
 
     /// Check if a turn is valid.
-    fn is_legal(&self, turn: &Turn) -> bool {
+    pub fn is_legal(&self, turn: &Turn) -> bool {
         // Occupied spaces are always not legal
         if self.is_occupied(turn) {
             return false;
@@ -138,25 +138,25 @@ impl State {
     /// Check if a position on the board is occupied.
     fn is_legal_in_direction(&self, turn: &Turn, delta_row: isize, delta_col: isize) -> bool {
         if let Turn::Valid(row, col) = *turn {
-            let a = (row as isize + delta_row) as usize;
-            let b = (col as isize + delta_col) as usize;
+            let x = (row as isize + delta_row) as usize;
+            let y = (col as isize + delta_col) as usize;
 
             // Check if adjacent piece belongs to the enemy
-            if self.get_piece(&Turn::new(a, b)) != Some(self.get_enemy()) {
+            if self.get_piece(&Turn::new(x, y)) != Some(self.get_enemy()) {
                 return false;
             }
 
             // Search for the player's piece as a delimiter
             for i in 2..BOARDSIZE {
-                let a = (row as isize + (i as isize * delta_row)) as usize;
-                let b = (col as isize + (i as isize * delta_col)) as usize;
+                let x = (row as isize + (i as isize * delta_row)) as usize;
+                let y = (col as isize + (i as isize * delta_col)) as usize;
 
-                if let Some(piece) = self.get_piece(&Turn::new(a, b)) {
-                    if piece == self.player {
+                if let Some(piece) = self.get_piece(&Turn::new(x, y)) {
+                    if piece == self.get_player() {
                         return true;
                     }
                 } else {
-                    return false
+                    return false;
                 }
             }
         }
@@ -174,9 +174,58 @@ impl State {
     }
 
     /// Set a piece on the board.
+    ///
+    /// Does not check legality of `turn`.
     fn set_piece(&mut self, turn: &Turn) {
         if let Turn::Valid(row, col) = *turn {
-            self.board[row][col] = self.player
+            self.board[row][col] = self.get_player();
+
+            // Check if pieces should be flipped in each direction
+            for delta_row in [-1, 0, 1].iter() {
+                for delta_col in [-1, 0, 1].iter() {
+                    // Only flip if legal in direction
+                    if self.is_legal_in_direction(turn, *delta_row, *delta_col) {
+                        // Flip until no longer the enemy's piece
+                        for i in 1..BOARDSIZE {
+                            let x = (row as isize + (i as isize * delta_row)) as usize;
+                            let y = (col as isize + (i as isize * delta_col)) as usize;
+
+                            if self.get_piece(&Turn::new(x, y)) == Some(self.get_enemy()) {
+                                self.board[x][y] = self.get_player();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Get the current player.
+    ///
+    /// # Panics
+    ///
+    /// The `get_player` function will panic if the current player is
+    /// the `Player::Empty` variant.
+    pub fn get_player(&self) -> Player {
+        match self.player {
+            Player::Empty => panic!("Current player is invalid."),
+            _ => self.player,
+        }
+    }
+
+    /// Get the current enemy player.
+    ///
+    /// # Panics
+    ///
+    /// The `get_enemy` function will panic if the current player is
+    /// the `Player::Empty` variant.
+    pub fn get_enemy(&self) -> Player {
+        match self.player {
+            Player::Black => Player::White,
+            Player::White => Player::Black,
+            _ => panic!("Current player is invalid."),
         }
     }
 
@@ -188,20 +237,6 @@ impl State {
     /// the `Player::Empty` variant.
     fn switch_player(&mut self) {
         self.player = self.get_enemy();
-    }
-
-    /// Get the enemy player.
-    ///
-    /// # Panics
-    ///
-    /// The `get_enemy` function will panic if the current player is
-    /// the `Player::Empty` variant.
-    fn get_enemy(&self) -> Player {
-        match self.player {
-            Player::Black => Player::White,
-            Player::White => Player::Black,
-            _ => panic!("Current player is invalid."),
-        }
     }
 }
 
@@ -229,14 +264,14 @@ mod tests {
         let mut state = State::new();
 
         // First player is black, so enemy is white
-        assert_eq!(state.player, Player::Black);
+        assert_eq!(state.get_player(), Player::Black);
         assert_eq!(state.get_enemy(), Player::White);
 
         // Switch players
         state.switch_player();
 
         // First player is black, so enemy is white
-        assert_eq!(state.player, Player::White);
+        assert_eq!(state.get_player(), Player::White);
         assert_eq!(state.get_enemy(), Player::Black);
     }
 
@@ -270,5 +305,24 @@ mod tests {
         assert_eq!(state.is_legal(&Turn::new(7, 7)), false);
         // Invalid spaces
         assert_eq!(state.is_legal(&Turn::new(8, 8)), false);
+    }
+
+    #[test]
+    fn set_piece_works() {
+        let mut state = State::new();
+
+        // Play a few moves
+        state.set_piece(&Turn::new(2, 3));
+        state.set_piece(&Turn::new(5, 4));
+
+        let mut manual_state = State::new();
+
+        // Manually flip pieces
+        manual_state.board[2][3] = Player::Black;
+        manual_state.board[3][3] = Player::Black;
+        manual_state.board[5][4] = Player::Black;
+        manual_state.board[4][4] = Player::Black;
+
+        assert_eq!(state.board, manual_state.board);
     }
 }
