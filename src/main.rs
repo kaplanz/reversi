@@ -1,8 +1,9 @@
+use mcts::Game;
 use reversi::{State, Turn};
 use std::io::{self, Write};
 
 fn main() {
-    let mut game = Game::new();
+    let mut game = Reversi::new();
 
     // Start a new game
     println!("Welcome to Reversi!");
@@ -22,15 +23,15 @@ fn main() {
 }
 
 /// Store the current game as a State with a collection of turns.
-struct Game {
+struct Reversi {
     state: State,
     turns: Vec<Turn>,
 }
 
-impl Game {
-    /// Create a new Game.
-    fn new() -> Game {
-        Game {
+impl Reversi {
+    /// Create a new Reversi game.
+    fn new() -> Reversi {
+        Reversi {
             state: State::new(),
             turns: Vec::new(),
         }
@@ -43,8 +44,8 @@ impl Game {
         println!();
         println!("{}", self.state);
 
-        // Get all legal turns
-        let legal_turns = self.state.get_legal_turns();
+        // Get all legal actions
+        let legal_turns = self.state.get_actions();
         // If none are avaliable...
         if legal_turns.is_empty() {
             println!("No avaliable turns for {:?}", self.state.get_player());
@@ -56,7 +57,7 @@ impl Game {
 
         // Print avaliable turns
         println!("Avaliable turns for {:?}:", self.state.get_player());
-        for turn in self.state.get_legal_turns() {
+        for turn in self.state.get_actions() {
             println!("{}", turn);
         }
 
@@ -114,10 +115,10 @@ impl Game {
     }
 }
 
-impl From<State> for Game {
+impl From<State> for Reversi {
     /// Create a game from an existing State.
     fn from(state: State) -> Self {
-        Game {
+        Reversi {
             state,
             turns: Vec::new(),
         }

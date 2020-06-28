@@ -2,8 +2,9 @@
 //!
 //! `reversi` is a library to handle the logic of the board game with the same name.
 
-use std::fmt;
+use mcts::Game;
 use std::cmp::Ordering;
+use std::fmt::{self, Display};
 
 /// Size of the board's width and height.
 pub const BOARDSIZE: usize = 8;
@@ -16,7 +17,7 @@ pub enum Player {
 
 struct Piece(Option<Player>);
 
-impl fmt::Display for Piece {
+impl Display for Piece {
     /// Display a game piece.
     ///
     /// - `Player::Black` is displayed as `"B"`
@@ -51,7 +52,7 @@ impl Turn {
     }
 }
 
-impl fmt::Display for Turn {
+impl Display for Turn {
     /// Display a game turn.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Turn::Valid(row, col) = *self {
@@ -90,74 +91,6 @@ impl State {
             board,
             player: Player::Black,
         }
-    }
-
-    /// Play a turn on the board.
-    pub fn play(&mut self, turn: &Turn) {
-        // Play only legal turns
-        if self.is_legal(turn) {
-            // Set the piece
-            self.set_piece(turn);
-        }
-
-        // Switch players (or pass)
-        self.switch_player();
-    }
-
-    /// Check if the game is over.
-    pub fn is_over(&self) -> bool {
-        if !self.get_legal_turns().is_empty() {
-            false
-        } else {
-            // Check if next player has any moves
-            let mut next_state = self.clone();
-            next_state.switch_player();
-            next_state.get_legal_turns().is_empty()
-        }
-    }
-
-    /// Get the winner of the current state.
-    ///
-    /// Returns the player with the most pieces on the board.
-    /// Does not check if game is over.
-    pub fn get_winner(&self) -> Option<Player> {
-        let mut tally = 0;
-
-        for i in 0..=BOARDSIZE {
-            for j in 0..=BOARDSIZE {
-                tally += match self.get_piece(&Turn::new(i, j)) {
-                    Some(Player::Black) => 1,
-                    Some(Player::White) => -1,
-                    _ => 0,
-                }
-            }
-        }
-
-        match tally.cmp(&0) {
-            Ordering::Less => Some(Player::White),
-            Ordering::Equal => None,
-            Ordering::Greater => Some(Player::Black),
-        }
-    }
-
-    /// Get all legal turns for the current state.
-    pub fn get_legal_turns(&self) -> Vec<Turn> {
-        let mut legal_turns = Vec::new();
-
-        // Iterate through the entire board
-        for i in 0..BOARDSIZE {
-            for j in 0..BOARDSIZE {
-                // Sort by col, then row
-                let turn = Turn::new(j, i);
-
-                // Check if each turn would be legal
-                if self.is_legal(&turn) {
-                    legal_turns.push(turn);
-                }
-            }
-        }
-
-        legal_turns
     }
 
     /// Check if a turn is valid.
@@ -253,11 +186,6 @@ impl State {
         }
     }
 
-    /// Get the current player.
-    pub fn get_player(&self) -> Player {
-        self.player
-    }
-
     /// Get the current enemy player.
     pub fn get_enemy(&self) -> Player {
         match self.player {
@@ -272,7 +200,7 @@ impl State {
     }
 }
 
-impl fmt::Display for State {
+impl Display for State {
     /// Display the game board.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Print row of letter labels
@@ -292,6 +220,84 @@ impl fmt::Display for State {
         }
 
         write!(f, "")
+    }
+}
+
+impl Game for State {
+    type Player = Player;
+    type Turn = Turn;
+
+    /// Play a turn on the board.
+    fn play(&mut self, turn: &Turn) {
+        // Play only legal turns
+        if self.is_legal(turn) {
+            // Set the piece
+            self.set_piece(turn);
+        }
+
+        // Switch players (or pass)
+        self.switch_player();
+    }
+
+    /// Get all legal turns for the current state.
+    fn get_actions(&self) -> Vec<Turn> {
+        let mut legal_turns = Vec::new();
+
+        // Iterate through the entire board
+        for i in 0..BOARDSIZE {
+            for j in 0..BOARDSIZE {
+                // Sort by col, then row
+                let turn = Turn::new(j, i);
+
+                // Check if each turn would be legal
+                if self.is_legal(&turn) {
+                    legal_turns.push(turn);
+                }
+            }
+        }
+
+        legal_turns
+    }
+
+    /// Get the current player.
+    fn get_player(&self) -> Player {
+        self.player
+    }
+
+    /// Check if the game is over.
+    fn is_over(&self) -> bool {
+        if !self.get_actions().is_empty() {
+            false
+        } else {
+            // Check if next player has any moves
+            let mut next_state = self.clone();
+            next_state.switch_player();
+            next_state.get_actions().is_empty()
+        }
+    }
+
+    /// Get the winner of the current state.
+    ///
+    /// Returns the player with the most pieces on the board.
+    /// Does not check if game is over.
+    fn get_winner(&self) -> Option<Player> {
+        let mut tally = 0;
+
+        for i in 0..=BOARDSIZE {
+            for j in 0..=BOARDSIZE {
+                tally += match self.get_piece(&Turn::new(i, j)) {
+                    Some(Player::Black) => 1,
+                    Some(Player::White) => -1,
+                    _ => 0,
+                }
+            }
+        }
+
+        match tally.cmp(&0) {
+            Ordering::Less => Some(Player::White),
+            Ordering::Equal => None,
+            Ordering::Greater => Some(Player::Black),
+        }
     }
 }
 
@@ -385,18 +391,23 @@ mod tests {
     }
 
     #[test]
-    fn test_get_legal_turns() {
+    fn test_get_actions() {
         let mut state = State::new();
 
         // Note: sorted by col, then row
-        assert_eq!(state.get_legal_turns(), [Turn::Valid(3, 2),
-                                             Turn::Valid(2, 3),
-                                             Turn::Valid(5, 4),
-                                             Turn::Valid(4, 5)]);
+        assert_eq!(
+            state.get_actions(),
+            [
+                Turn::Valid(3, 2),
+                Turn::Valid(2, 3),
+                Turn::Valid(5, 4),
+                Turn::Valid(4, 5)
+            ]
+        );
 
         // No legal turns
         state.board[3][3] = Some(Player::Black);
         state.board[4][4] = Some(Player::Black);
-        assert_eq!(state.get_legal_turns(), []);
+        assert_eq!(state.get_actions(), []);
     }
 }
