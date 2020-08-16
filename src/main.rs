@@ -1,5 +1,5 @@
 use mcts::Game;
-use reversi::{State, Turn};
+use reversi::{Player, State, Turn};
 use std::io::{self, Write};
 
 fn main() {
@@ -46,38 +46,45 @@ impl Reversi {
 
         // Get all legal actions
         let legal_turns = self.state.get_actions();
-        // If none are avaliable...
+        // If none are available...
         if legal_turns.is_empty() {
-            println!("No avaliable turns for {:?}", self.state.get_player());
+            println!("No available turns for {:?}", self.state.get_player());
             // ... switch to the next player...
             self.state.switch_player();
             // ... then return
             return;
         }
 
-        // Print avaliable turns
-        println!("Avaliable turns for {:?}:", self.state.get_player());
+        // Print available turns
+        println!("Available turns for {:?}:", self.state.get_player());
         for turn in self.state.get_actions() {
             println!("{}", turn);
         }
 
-        // Prompt user to take their turn
-        print!("Take your turn: ");
-        io::stdout().flush().unwrap();
-
-        let mut turn = self.get_turn();
-
-        while (turn == Turn::Invalid) || !self.state.is_legal(&turn) {
-            print!("Invalid. Please try again: ");
+        // Get a turn from either the user or computer
+        let mut turn;
+        if self.state.get_player() == Player::Black {
+            // Use the MCTS algorithm to get a move
+            turn = self.state.mcts();
+            println!("Computer plays: {}", turn)
+        } else {
+            // Prompt user to take their turn
+            print!("Take your turn: ");
             io::stdout().flush().unwrap();
 
             turn = self.get_turn();
+
+            while (turn == Turn::Invalid) || !self.state.is_legal(&turn) {
+                print!("Invalid. Please try again: ");
+                io::stdout().flush().unwrap();
+
+                turn = self.get_turn();
+            }
         }
 
         // Play turn
         self.set_turn(turn);
 
-        println!();
         println!();
     }
 
@@ -88,7 +95,7 @@ impl Reversi {
             let mut input = String::new();
             io::stdin()
                 .read_line(&mut input)
-                .expect("Error: coult not parse input.");
+                .expect("Error: could not parse input.");
 
             // Process input
             let input = input.trim().as_bytes();

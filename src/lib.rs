@@ -204,15 +204,16 @@ impl Display for State {
     /// Display the game board.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Print row of letter labels
-        write!(f, " ")?;
+        write!(f, "  |")?;
         for i in 0..BOARDSIZE {
             write!(f, " {}", (b'a' + i as u8) as char)?;
         }
         writeln!(f)?;
+        writeln!(f, "--+{}", "-".repeat(2 * BOARDSIZE))?;
 
         // Print each for of the board
         for (i, row) in self.board.iter().enumerate() {
-            write!(f, "{}", i + 1)?;
+            write!(f, "{} |", i + 1)?;
             for piece in row.iter() {
                 write!(f, " {}", Piece(*piece))?;
             }
@@ -237,6 +238,10 @@ impl Game for State {
 
         // Switch players (or pass)
         self.switch_player();
+        // If opponent has no moves, switch back
+        if self.get_actions().len() == 0 {
+            self.switch_player();
+        }
     }
 
     /// Get all legal turns for the current state.
