@@ -1,133 +1,64 @@
-use mcts::Game;
-use reversi::{Player, State, Turn};
+use reversi::*;
 use std::io::{self, Write};
 
 fn main() {
+    println!("Welcome to Reversi!");
+    println!();
+
     let mut game = Reversi::new();
 
-    // Start a new game
-    println!("Welcome to Reversi!");
-
-    // Play rounds until the game is over
-    while !game.state.is_over() {
-        game.play_round();
+    while !game.over() {
+        println!("{}", game);
+        let turn = get_turn(&game);
+        game.play(turn);
     }
 
-    // Announce the winner
-    print!("Game over: ");
-    if let Some(player) = game.state.get_winner() {
-        println!("{:?} wins!", player);
-    } else {
-        println!("It's a tie!");
+    println!("{}", game);
+    match game.winner() {
+        Some(player) => println!("Winner: {:?}", player),
+        None => println!("It's a tie!"),
     }
 }
 
-/// Store the current game as a State with a collection of turns.
-struct Reversi {
-    state: State,
-    turns: Vec<Turn>,
-}
+fn get_turn(game: &Reversi) -> Turn {
+    loop {
+        // Print prompt
+        print!("[{:?}] >> ", game.player());
+        io::stdout().flush().unwrap();
 
-impl Reversi {
-    /// Create a new Reversi game.
-    fn new() -> Reversi {
-        Reversi {
-            state: State::new(),
-            turns: Vec::new(),
-        }
-    }
+        // Get user input
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
 
-    /// Play a round of the game.
-    fn play_round(&mut self) {
-        // Print current state of game
-        println!("Turn #{}", self.turns.len() + 1);
-        println!();
-        println!("{}", self.state);
-
-        // Get all legal actions
-        let legal_turns = self.state.get_actions();
-        // If none are available...
-        if legal_turns.is_empty() {
-            println!("No available turns for {:?}", self.state.get_player());
-            // ... switch to the next player...
-            self.state.switch_player();
-            // ... then return
-            return;
+        // Process input
+        let input = input.trim().as_bytes();
+        if input.is_empty() {
+            continue;
         }
 
-        // Print available turns
-        println!("Available turns for {:?}:", self.state.get_player());
-        for turn in self.state.get_actions() {
-            println!("{}", turn);
+        // Validate input
+        if input.len() != 2 {
+            eprintln!("error: invalid input");
+            continue;
         }
 
-        // Get a turn from either the user or computer
-        let mut turn;
-        if self.state.get_player() == Player::Black {
-            // Use the MCTS algorithm to get a move
-            turn = self.state.mcts();
-            println!("Computer plays: {}", turn)
-        } else {
-            // Prompt user to take their turn
-            print!("Take your turn: ");
-            io::stdout().flush().unwrap();
-
-            turn = self.get_turn();
-
-            while (turn == Turn::Invalid) || !self.state.is_legal(&turn) {
-                print!("Invalid. Please try again: ");
-                io::stdout().flush().unwrap();
-
-                turn = self.get_turn();
-            }
-        }
-
-        // Play turn
-        self.set_turn(turn);
-
-        println!();
-    }
-
-    /// Prompt the player for their turn.
-    fn get_turn(&self) -> Turn {
-        loop {
-            // Get user input
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .expect("Error: could not parse input.");
-
-            // Process input
-            let input = input.trim().as_bytes();
-
-            if input.len() != 2 {
-                print!("Bad input. Please try again: ");
-                io::stdout().flush().unwrap();
-
+        // Parse input
+        let row = match input[1].checked_sub(b'1') {
+            Some(row) => row as usize,
+            None => {
+                eprintln!("error: invalid row");
                 continue;
-            }
+            },
+        };
+        let col = match input[0].checked_sub(b'a') {
+            Some(col) => col as usize,
+            None => {
+                eprintln!("error: invalid col");
+                continue;
+            },
+        };
+        let pos = Position(row, col);
 
-            return Turn::new(
-                input[1].checked_sub(b'1').unwrap_or(0) as usize,
-                input[0].checked_sub(b'a').unwrap_or(0) as usize,
-            );
-        }
-    }
-
-    /// Play a turn of the game.
-    fn set_turn(&mut self, turn: Turn) {
-        self.state.play(&turn);
-
-        self.turns.push(turn);
-    }
-}
-
-impl From<State> for Reversi {
-    /// Create a game from an existing State.
-    fn from(state: State) -> Self {
-        Reversi {
-            state,
-            turns: Vec::new(),
-        }
+        return Turn::new(game.player(), pos);
     }
 }
