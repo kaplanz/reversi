@@ -2,16 +2,16 @@
 //!
 //! `reversi` is a library to handle the logic of the board game of the same name.
 
+use mcts::Mcts;
+use std::cmp::Ordering;
 use std::fmt::{self, Display};
-use std::{
-    cmp::Ordering,
-    ops::{Index, IndexMut},
-};
+use std::ops::{Index, IndexMut};
 
 /// Size of the game board.
 const BOARDSIZE: usize = 8;
 
 /// Reversi game.
+#[derive(Clone, Debug)]
 pub struct Reversi {
     board: Board<BOARDSIZE>,
     turns: Vec<Turn>,
@@ -25,27 +25,37 @@ impl Reversi {
             turns: Vec::new(),
         }
     }
+}
+
+impl Mcts for Reversi {
+    type Player = Player;
+    type Turn = Turn;
 
     /// Get the current player.
-    pub fn player(&self) -> Player {
+    fn player(&self) -> Player {
         self.board.player
     }
 
+    /// Get all legal turns.
+    fn turns(&self) -> Vec<Turn> {
+        self.board.turns()
+    }
+
     /// Play a turn of the game.
-    pub fn play(&mut self, turn: Turn) {
+    fn play(&mut self, turn: Turn) {
         self.board.play(&turn);
         self.turns.push(turn);
     }
 
     /// Check if the game is over.
-    pub fn over(&self) -> bool {
+    fn over(&self) -> bool {
         self.board.over()
     }
 
     /// Get the winner of the game.
     ///
     /// Returns `None` if the game is still ongoing.
-    pub fn winner(&self) -> Option<Player> {
+    fn winner(&self) -> Option<Player> {
         self.board.winner()
     }
 }
@@ -59,7 +69,7 @@ impl Display for Reversi {
 /// Board on which the game is played.
 ///
 /// Responsible for managing the placement of pieces and handling game logic.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct Board<const BOARDSIZE: usize> {
     squares: [[Square; BOARDSIZE]; BOARDSIZE],
     player: Player,
@@ -86,15 +96,30 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
 }
 
 impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
-    /// Play a turn of the game.
-    ///
-    /// Ensures the turn is at a valid position.
-    fn play(&mut self, turn: &Turn) {
-        // Perform bounds check
-        if let None = self.get(turn.pos) {
-            return;
+    /// Get all legal turns for the current player.
+    fn turns(&self) -> Vec<Turn> {
+        let mut turns = Vec::new();
+
+        // Iterate through the entire board
+        for i in 0..BOARDSIZE {
+            for j in 0..BOARDSIZE {
+                // Sort by col, then row
+                let turn = Turn::new(self.player, Position(j, i));
+
+                // Check if each turn would be legal
+                if self.is_legal(&turn) {
+                    turns.push(turn);
+                }
+            }
         }
 
+        turns
+    }
+
+    /// Play a turn of the game.
+    ///
+    /// Returns early if `turn` is illegal.
+    fn play(&mut self, turn: &Turn) {
         // Try to play the turn, return on failure
         if !self.set_turn(turn) {
             return;
@@ -139,61 +164,12 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
         }
     }
 
-    /// Check if the current player has a legal turn.
-    fn has_turn(&self, player: Player) -> bool {
-        // Iterate through the entire board
-        for i in 0..BOARDSIZE {
-            for j in 0..BOARDSIZE {
-                let turn = Turn::new(player, Position(j, i));
-
-                // Check if turn is legal for player
-                if self.is_legal(&turn) {
-                    return true;
-                }
-            }
-        }
-
-        false
-    }
-
-    /// Get all legal turns for the current player.
-    fn get_turns(&self) -> Vec<Turn> {
-        let mut turns = Vec::new();
-
-        // Iterate through the entire board
-        for i in 0..BOARDSIZE {
-            for j in 0..BOARDSIZE {
-                // Sort by col, then row
-                let turn = Turn::new(self.player, Position(j, i));
-
-                // Check if each turn would be legal
-                if self.is_legal(&turn) {
-                    turns.push(turn);
-                }
-            }
-        }
-
-        turns
-    }
-
-    /// Check if a position is in bounds.
-    fn in_bounds(&self, pos: Position) -> bool {
-        self.get(pos) == None
-    }
-
-    /// Check if a position on the board is occupied.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if `pos` is out of bounds.
-    fn is_occupied(&self, pos: Position) -> bool {
-        self[pos].occupied()
-    }
-
     /// Check if a turn is legal.
+    ///
+    /// Performs bounds check on `turn`.
     fn is_legal(&self, turn: &Turn) -> bool {
         // Perform bounds check
-        if self.in_bounds(turn.pos) {
+        if !self.in_bounds(turn.pos) {
             return false;
         }
 
@@ -215,20 +191,20 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
     }
 
     /// Check if a turn is legal in a direction.
-    fn is_legal_in_direction(&self, turn: &Turn, dir: (isize, isize)) -> bool {
+    fn is_legal_in_direction(&self, turn: &Turn, (dx, dy): (isize, isize)) -> bool {
         let Position(row, col) = turn.pos;
 
         // Check if adjacent square belongs to the opponent
-        let x = (row as isize + dir.0) as usize;
-        let y = (col as isize + dir.1) as usize;
+        let x = (row as isize + dx) as usize;
+        let y = (col as isize + dy) as usize;
         if self.get(Position(x, y)) != Some(&Square::Piece(turn.player.opponent())) {
             return false;
         }
 
         // Search for the player's piece as a delimiter
         for i in 2..BOARDSIZE {
-            let x = (row as isize + (i as isize * dir.0)) as usize;
-            let y = (col as isize + (i as isize * dir.1)) as usize;
+            let x = (row as isize + (i as isize * dx)) as usize;
+            let y = (col as isize + (i as isize * dy)) as usize;
             match self.get(Position(x, y)) {
                 Some(Square::Piece(player)) if player == &turn.player => return true,
                 Some(_) => continue,
@@ -239,17 +215,48 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
         false
     }
 
-    /// Set a turn on the board.
-    fn set_turn(&mut self, turn: &Turn) -> bool {
-        // Perform bounds check, ensure square is empty
-        if self.get(turn.pos) != Some(&Square::Empty) {
-            return false;
+    /// Check if a position is in bounds.
+    fn in_bounds(&self, pos: Position) -> bool {
+        self.get(pos).is_some()
+    }
+
+    /// Check if a position on the board is occupied.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `pos` is out of bounds.
+    fn is_occupied(&self, pos: Position) -> bool {
+        self[pos].occupied()
+    }
+
+    /// Check if the current player has a legal turn.
+    fn has_turn(&self, player: Player) -> bool {
+        // Iterate through the entire board
+        for i in 0..BOARDSIZE {
+            for j in 0..BOARDSIZE {
+                let turn = Turn::new(player, Position(j, i));
+
+                // Check if turn is legal for player
+                if self.is_legal(&turn) {
+                    return true;
+                }
+            }
         }
 
-        // Ensure the turn is legal
+        false
+    }
+
+    /// Set a turn on the board.
+    ///
+    /// Performs legality check on `turn`.
+    fn set_turn(&mut self, turn: &Turn) -> bool {
+        // Perform legality check
         if !self.is_legal(turn) {
             return false;
         }
+
+        // Set the player
+        self.player = turn.player;
 
         // Set the piece
         self[turn.pos] = Square::Piece(turn.player);
@@ -302,6 +309,7 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
     /// Mutably borrow the square at a position.
     ///
     /// Performs bounds check, and returns `None` variant on invalid position.
+    #[allow(dead_code)]
     fn get_mut(&mut self, pos: Position) -> Option<&mut Square> {
         self.squares.get_mut(pos.0)?.get_mut(pos.1)
     }
@@ -418,6 +426,12 @@ impl Turn {
     }
 }
 
+impl Display for Turn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.pos)
+    }
+}
+
 /// A position on the board.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Position(pub usize, pub usize);
@@ -434,7 +448,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn player_switch_works() {
+    fn game_player_test() {
         let mut game = Reversi::new();
 
         // Start a new game playing as black
@@ -448,7 +462,29 @@ mod tests {
     }
 
     #[test]
-    fn game_play_works() {
+    fn game_board_turns_test() {
+        let mut game = Reversi::new();
+
+        // Check legal first turns
+        // NOTE: ordered by col, then row
+        assert_eq!(
+            game.board.turns(),
+            [
+                Turn::new(Player::Black, Position(3, 2)),
+                Turn::new(Player::Black, Position(2, 3)),
+                Turn::new(Player::Black, Position(5, 4)),
+                Turn::new(Player::Black, Position(4, 5)),
+            ]
+        );
+
+        // Remove all legal turns
+        game.board[Position(3, 3)] = Square::Piece(Player::Black);
+        game.board[Position(4, 4)] = Square::Piece(Player::Black);
+        assert_eq!(game.board.turns(), []);
+    }
+
+    #[test]
+    fn game_play_test() {
         let mut game = Reversi::new();
 
         // Play a few moves
@@ -465,24 +501,44 @@ mod tests {
     }
 
     #[test]
-    fn game_over_works() {
+    fn game_over_test() {
         let mut game = Reversi::new();
 
-        // Play a few moves
-        game.board.set_turn(&Turn::new(Player::Black, Position(2, 3)));
-        game.board.set_turn(&Turn::new(Player::Black, Position(5, 4)));
-
-        // Manually play turns
-        let mut board = Board::new();
-        board[Position(2, 3)] = Square::Piece(Player::Black);
-        board[Position(3, 3)] = Square::Piece(Player::Black);
-        board[Position(5, 4)] = Square::Piece(Player::Black);
-        board[Position(4, 4)] = Square::Piece(Player::Black);
-        assert_eq!(game.board, board);
+        // Play first turn until game is over
+        while !game.over() {
+            let turn = game.turns()[0].clone();
+            game.play(turn);
+        }
     }
 
     #[test]
-    fn board_is_occupied_works() {
+    fn game_over_early_test() {
+        let mut game = Reversi::new();
+
+        // Play game until an early end
+        game.play(Turn::new(Player::Black, Position(3, 2)));
+        assert!(!game.over());
+        game.play(Turn::new(Player::White, Position(2, 2)));
+        assert!(!game.over());
+        game.play(Turn::new(Player::Black, Position(1, 2)));
+        assert!(!game.over());
+        game.play(Turn::new(Player::White, Position(3, 1)));
+        assert!(!game.over());
+        game.play(Turn::new(Player::Black, Position(4, 0)));
+        assert!(!game.over());
+        game.play(Turn::new(Player::White, Position(3, 5)));
+        assert!(!game.over());
+        game.play(Turn::new(Player::Black, Position(3, 6)));
+        assert!(!game.over());
+        game.play(Turn::new(Player::White, Position(4, 2)));
+        assert!(!game.over());
+        game.play(Turn::new(Player::Black, Position(5, 3)));
+        assert!(game.over());
+        assert_eq!(game.winner(), Some(Player::Black));
+    }
+
+    #[test]
+    fn game_board_is_occupied_test() {
         let game = Reversi::new();
 
         assert_eq!(game.board.is_occupied(Position(0, 0)), false);
@@ -492,51 +548,31 @@ mod tests {
     }
 
     #[test]
-    fn board_is_legal_works() {
+    fn game_board_is_legal_test() {
         let game = Reversi::new();
+        let board = &game.board;
 
         // Legal spaces for black's first turn
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(2, 3))), true);
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(3, 2))), true);
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(4, 5))), true);
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(5, 4))), true);
+        assert!(board.is_legal(&Turn::new(game.player(), Position(2, 3))));
+        assert!(board.is_legal(&Turn::new(game.player(), Position(3, 2))));
+        assert!(board.is_legal(&Turn::new(game.player(), Position(4, 5))));
+        assert!(board.is_legal(&Turn::new(game.player(), Position(5, 4))));
 
         // Legal spaces for white's first turn
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(2, 4))), false);
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(4, 2))), false);
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(5, 3))), false);
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(3, 5))), false);
+        assert!(!board.is_legal(&Turn::new(game.player(), Position(2, 4))));
+        assert!(!board.is_legal(&Turn::new(game.player(), Position(4, 2))));
+        assert!(!board.is_legal(&Turn::new(game.player(), Position(5, 3))));
+        assert!(!board.is_legal(&Turn::new(game.player(), Position(3, 5))));
 
         // Occupied spaces
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(3, 3))), false);
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(4, 4))), false);
+        assert!(!board.is_legal(&Turn::new(game.player(), Position(3, 3))));
+        assert!(!board.is_legal(&Turn::new(game.player(), Position(4, 4))));
 
         // Spaces on the edge of the board
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(0, 0))), false);
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(7, 7))), false);
+        assert!(!board.is_legal(&Turn::new(game.player(), Position(0, 0))));
+        assert!(!board.is_legal(&Turn::new(game.player(), Position(7, 7))));
 
         // Invalid spaces
-        assert_eq!(game.board.is_legal(&Turn::new(game.player(), Position(8, 8))), false);
-    }
-
-    #[test]
-    fn board_get_turns_works() {
-        let mut game = Reversi::new();
-
-        // Note: sorted by col, then row
-        assert_eq!(
-            game.board.get_turns(),
-            [
-                Turn::new(Player::Black, Position(3, 2)),
-                Turn::new(Player::Black, Position(2, 3)),
-                Turn::new(Player::Black, Position(5, 4)),
-                Turn::new(Player::Black, Position(4, 5)),
-            ]
-        );
-
-        // Remove all legal turns
-        game.board[Position(3, 3)] = Square::Piece(Player::Black);
-        game.board[Position(4, 4)] = Square::Piece(Player::Black);
-        assert_eq!(game.board.get_turns(), []);
+        assert!(!board.is_legal(&Turn::new(game.player(), Position(8, 8))));
     }
 }

@@ -10,27 +10,26 @@ const DURATION: u128 = 995;
 const THRESHOLD: u32 = 3;
 const EXPLORE: f64 = 0.5;
 
-/// Trait to define methods needed by MCTS.
-pub trait Game: Clone {
+pub trait Mcts: Clone {
     type Player: PartialEq;
     type Turn: Clone;
 
-    /// Play a turn of the game.
-    fn play(&mut self, turn: &Self::Turn);
-
-    /// Get all actions for the current state.
-    fn get_actions(&self) -> Vec<Self::Turn>;
-
     /// Get the current player.
-    fn get_player(&self) -> Self::Player;
+    fn player(&self) -> Self::Player;
+
+    /// Get all legal turns.
+    fn turns(&self) -> Vec<Self::Turn>;
+
+    /// Play a turn of the game.
+    fn play(&mut self, turn: Self::Turn);
 
     /// Check if the game is over.
-    fn is_over(&self) -> bool;
+    fn over(&self) -> bool;
 
-    /// Get the winner of the current state.
-    fn get_winner(&self) -> Option<Self::Player>;
+    /// Get the winner of the game.
+    fn winner(&self) -> Option<Self::Player>;
 
-    /// Propose an action through MCTS.
+    /// Run MCTS to select a turn.
     fn mcts(&self) -> Self::Turn {
         // Record time MCTS was started
         let now = Instant::now();
@@ -89,13 +88,13 @@ pub trait Game: Clone {
 }
 
 /// The game tree from the current position.
-struct Tree<G: Game> {
+struct Tree<G: Mcts> {
     arena: Vec<Node<G>>,
     root: usize,
 }
 
 /// A single state in the game tree.
-struct Node<G: Game> {
+struct Node<G: Mcts> {
     // Position
     idx: usize,
     parent: usize,
@@ -109,8 +108,8 @@ struct Node<G: Game> {
     initiative: f64,
 }
 
-impl<G: Game> Node<G> {
-    /// Create a new `Node`.
+impl<G: Mcts> Node<G> {
+    /// Create a new Node.
     fn new(idx: usize, parent: usize, state: Box<G>, action: Option<G::Turn>) -> Node<G> {
         Node {
             idx,
@@ -124,25 +123,25 @@ impl<G: Game> Node<G> {
         }
     }
 
-    /// Simulate the game from `self`.
+    /// Simulate the game form this node.
     fn simulate(&self) -> Option<G::Player> {
         // Create a copy of the current state to simulate
         let mut state = self.state.clone();
 
-        while !state.is_over() {
+        while !state.over() {
             // Policy: select a random move
             let action = state
-                .get_actions()
+                .turns()
                 .choose(&mut rand::thread_rng())
                 .unwrap()
                 .clone();
-            state.play(&action);
+            state.play(action);
         }
 
-        state.get_winner()
+        state.winner()
     }
 
-    /// Update the initiative of `self`
+    /// Update this node's initiative
     fn update_initiative(&mut self, round: usize) {
         let expliotation = (self.wins as f64) / (self.sims as f64);
         let exploration = EXPLORE * ((round as f64).log10() / self.sims as f64).sqrt();
@@ -150,8 +149,8 @@ impl<G: Game> Node<G> {
     }
 }
 
-impl<G: Game> Tree<G> {
-    /// Create a new `Tree` initialized with a root.
+impl<G: Mcts> Tree<G> {
+    /// Create a new Tree initialized with a root.
     fn new(state: Box<G>) -> Tree<G> {
         Tree {
             arena: vec![Node::new(0, 0, state, None)],
@@ -191,10 +190,10 @@ impl<G: Game> Tree<G> {
     /// Expand a node to create children in the game tree.
     fn expand(&mut self, idx: usize) {
         // Iterate through actions to create children
-        for action in self.arena[idx].state.get_actions() {
+        for action in self.arena[idx].state.turns() {
             // Clone state and play action
             let mut state: G = *self.arena[idx].state.clone();
-            state.play(&action);
+            state.play(action.clone());
 
             // Add the new child
             self.arena.push(Node::new(
@@ -216,7 +215,7 @@ impl<G: Game> Tree<G> {
             let node = &mut self.arena[idx];
 
             // Update statistics of node
-            if Some(node.state.get_player()) == winner {
+            if Some(node.state.player()) == winner {
                 node.wins += 1;
             }
             node.sims += 1;

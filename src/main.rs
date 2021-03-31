@@ -1,3 +1,4 @@
+use mcts::Mcts;
 use reversi::*;
 use std::io::{self, Write};
 
@@ -9,7 +10,17 @@ fn main() {
 
     while !game.over() {
         println!("{}", game);
-        let turn = get_turn(&game);
+
+        println!("Available turns:");
+        for turn in game.turns() {
+            println!("{}", turn);
+        }
+
+        let turn = match game.player() {
+            Player::Black => get_turn(&game),
+            Player::White => game.mcts(),
+        };
+
         game.play(turn);
     }
 
@@ -48,14 +59,14 @@ fn get_turn(game: &Reversi) -> Turn {
             None => {
                 eprintln!("error: invalid row");
                 continue;
-            },
+            }
         };
         let col = match input[0].checked_sub(b'a') {
             Some(col) => col as usize,
             None => {
                 eprintln!("error: invalid col");
                 continue;
-            },
+            }
         };
         let pos = Position(row, col);
 
