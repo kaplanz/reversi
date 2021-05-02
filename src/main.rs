@@ -7,21 +7,26 @@ fn main() {
     println!();
 
     let mut game = Reversi::new();
+    let mut success = true;
 
     while !game.over() {
-        println!("{}", game);
+        if success {
+            println!("{}", game);
 
-        println!("Available turns:");
-        for turn in game.turns() {
-            println!("{}", turn);
+            println!("Available turns:");
+            for turn in game.turns() {
+                println!("{}", turn);
+            }
+        } else {
+            println!("error: could not play turn");
         }
 
         let turn = match game.player() {
-            Player::Black => get_turn(&game),
+            Player::Black => get_turn(game.player()),
             Player::White => game.mcts(),
         };
 
-        game.play(turn);
+        success = game.play(turn);
     }
 
     println!("{}", game);
@@ -31,10 +36,10 @@ fn main() {
     }
 }
 
-fn get_turn(game: &Reversi) -> Turn {
+fn get_turn(player: Player) -> Turn {
     loop {
         // Print prompt
-        print!("[{:?}] >> ", game.player());
+        print!("[{:?}] >> ", &player);
         io::stdout().flush().unwrap();
 
         // Get user input
@@ -70,6 +75,6 @@ fn get_turn(game: &Reversi) -> Turn {
         };
         let pos = Position(row, col);
 
-        return Turn::new(game.player(), pos);
+        return Turn::new(player, pos);
     }
 }

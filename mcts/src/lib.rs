@@ -21,7 +21,7 @@ pub trait Mcts: Clone {
     fn turns(&self) -> Vec<Self::Turn>;
 
     /// Play a turn of the game.
-    fn play(&mut self, turn: Self::Turn);
+    fn play(&mut self, turn: Self::Turn) -> bool;
 
     /// Check if the game is over.
     fn over(&self) -> bool;

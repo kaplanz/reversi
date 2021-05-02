@@ -14,7 +14,6 @@ const BOARDSIZE: usize = 8;
 #[derive(Clone, Debug)]
 pub struct Reversi {
     board: Board<BOARDSIZE>,
-    turns: Vec<Turn>,
 }
 
 impl Reversi {
@@ -22,7 +21,6 @@ impl Reversi {
     pub fn new() -> Reversi {
         Reversi {
             board: Board::<BOARDSIZE>::new(),
-            turns: Vec::new(),
         }
     }
 }
@@ -42,9 +40,8 @@ impl Mcts for Reversi {
     }
 
     /// Play a turn of the game.
-    fn play(&mut self, turn: Turn) {
-        self.board.play(&turn);
-        self.turns.push(turn);
+    fn play(&mut self, turn: Turn) -> bool {
+        self.board.play(&turn)
     }
 
     /// Check if the game is over.
@@ -117,18 +114,16 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
     }
 
     /// Play a turn of the game.
-    ///
-    /// Returns early if `turn` is illegal.
-    fn play(&mut self, turn: &Turn) {
-        // Try to play the turn, return on failure
-        if !self.set_turn(turn) {
-            return;
-        }
+    fn play(&mut self, turn: &Turn) -> bool {
+        // Try to play the turn
+        let success = self.set_turn(turn);
 
         // Only switch players if opponent has a turn
-        if self.has_turn(self.player.opponent()) {
+        if success && self.has_turn(self.player.opponent()) {
             self.player.switch();
         }
+
+        success
     }
 
     /// Check if the game is over.
