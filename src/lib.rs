@@ -2,10 +2,11 @@
 //!
 //! `reversi` is a library to handle the logic of the board game of the same name.
 
-use mcts::Mcts;
 use std::cmp::Ordering;
 use std::fmt::{self, Display};
 use std::ops::{Index, IndexMut};
+
+use mcts::Mcts;
 
 /// Size of the game board.
 const BOARDSIZE: usize = 8;
@@ -22,6 +23,18 @@ impl Reversi {
         Reversi {
             board: Board::<BOARDSIZE>::new(),
         }
+    }
+}
+
+impl Default for Reversi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Display for Reversi {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.board)
     }
 }
 
@@ -57,12 +70,6 @@ impl Mcts for Reversi {
     }
 }
 
-impl Display for Reversi {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.board)
-    }
-}
-
 /// Board on which the game is played.
 ///
 /// Responsible for managing the placement of pieces and handling game logic.
@@ -90,9 +97,7 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
             player: Player::Black,
         }
     }
-}
 
-impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
     /// Get all legal turns for the current player.
     fn turns(&self) -> Vec<Turn> {
         let mut turns = Vec::new();
@@ -281,9 +286,7 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
 
         true
     }
-}
 
-impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
     /// Get the board height.
     fn height(&self) -> usize {
         self.squares.len()
@@ -307,20 +310,6 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
     #[allow(dead_code)]
     fn get_mut(&mut self, pos: Position) -> Option<&mut Square> {
         self.squares.get_mut(pos.0)?.get_mut(pos.1)
-    }
-}
-
-impl<const BOARDSIZE: usize> Index<Position> for Board<BOARDSIZE> {
-    type Output = Square;
-
-    fn index(&self, pos: Position) -> &Self::Output {
-        &self.squares[pos.0][pos.1]
-    }
-}
-
-impl<const BOARDSIZE: usize> IndexMut<Position> for Board<BOARDSIZE> {
-    fn index_mut(&mut self, pos: Position) -> &mut Self::Output {
-        &mut self.squares[pos.0][pos.1]
     }
 }
 
@@ -348,6 +337,20 @@ impl<const BOARDSIZE: usize> Display for Board<BOARDSIZE> {
 
         // Print bottom border
         write!(f, "└───┴{}─┘", "─".repeat(2 * BOARDSIZE))
+    }
+}
+
+impl<const BOARDSIZE: usize> Index<Position> for Board<BOARDSIZE> {
+    type Output = Square;
+
+    fn index(&self, pos: Position) -> &Self::Output {
+        &self.squares[pos.0][pos.1]
+    }
+}
+
+impl<const BOARDSIZE: usize> IndexMut<Position> for Board<BOARDSIZE> {
+    fn index_mut(&mut self, pos: Position) -> &mut Self::Output {
+        &mut self.squares[pos.0][pos.1]
     }
 }
 

@@ -1,6 +1,7 @@
+use std::io::{self, Write};
+
 use mcts::Mcts;
 use reversi::*;
-use std::io::{self, Write};
 
 fn main() {
     println!("Welcome to Reversi!");

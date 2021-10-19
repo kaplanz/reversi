@@ -2,9 +2,10 @@
 //!
 //! `mcts` is a library for running the MCTS algorithm for turn based games.
 
-use rand::seq::SliceRandom;
 use std::f64::INFINITY;
 use std::time::Instant;
+
+use rand::seq::SliceRandom;
 
 const DURATION: u128 = 995;
 const THRESHOLD: u32 = 3;
@@ -93,6 +94,86 @@ struct Tree<G: Mcts> {
     root: usize,
 }
 
+impl<G: Mcts> Tree<G> {
+    /// Create a new Tree initialized with a root.
+    fn new(state: Box<G>) -> Tree<G> {
+        Tree {
+            arena: vec![Node::new(0, 0, state, None)],
+            root: 0,
+        }
+    }
+
+    /// Borrow a `Node` from the tree.
+    fn borrow_node(&self, idx: usize) -> &Node<G> {
+        &self.arena[idx]
+    }
+
+    /// Borrow a `Node` from the tree mutably.
+    fn borrow_node_mut(&mut self, idx: usize) -> &mut Node<G> {
+        &mut self.arena[idx]
+    }
+
+    /// Explore the game tree.
+    fn select(&self) -> usize {
+        let mut node = &self.arena[self.root]; // start at the root
+
+        // Loop until `node` has no children
+        while !node.children.is_empty() {
+            // Get the child with the highest initiative
+            node = &self.arena[node.children[0]];
+            for child in node.children.iter() {
+                let child = &self.arena[*child];
+                if child.initiative > node.initiative {
+                    node = child;
+                }
+            }
+        }
+
+        node.idx
+    }
+
+    /// Expand a node to create children in the game tree.
+    fn expand(&mut self, idx: usize) {
+        // Iterate through actions to create children
+        for action in self.arena[idx].state.turns() {
+            // Clone state and play action
+            let mut state: G = *self.arena[idx].state.clone();
+            state.play(action.clone());
+
+            // Add the new child
+            self.arena.push(Node::new(
+                self.arena.len(),
+                idx,
+                Box::new(state),
+                Some(action),
+            ));
+            // Parent stores index of child
+            let child = self.arena.last().unwrap().idx;
+            self.arena[idx].children.push(child);
+        }
+    }
+
+    /// Backpropagate the result of a simulation.
+    fn backpropagate(&mut self, mut idx: usize, winner: Option<G::Player>, round: usize) {
+        // Backpropagate until the root
+        while idx != 0 {
+            let node = &mut self.arena[idx];
+
+            // Update statistics of node
+            if Some(node.state.player()) == winner {
+                node.wins += 1;
+            }
+            node.sims += 1;
+
+            // Update this node's initiative
+            node.update_initiative(round);
+
+            // Ascend to parent
+            idx = node.parent;
+        }
+    }
+}
+
 /// A single state in the game tree.
 struct Node<G: Mcts> {
     // Position
@@ -146,86 +227,6 @@ impl<G: Mcts> Node<G> {
         let expliotation = (self.wins as f64) / (self.sims as f64);
         let exploration = EXPLORE * ((round as f64).log10() / self.sims as f64).sqrt();
         self.initiative = expliotation + exploration;
-    }
-}
-
-impl<G: Mcts> Tree<G> {
-    /// Create a new Tree initialized with a root.
-    fn new(state: Box<G>) -> Tree<G> {
-        Tree {
-            arena: vec![Node::new(0, 0, state, None)],
-            root: 0,
-        }
-    }
-
-    /// Borrow a `Node` from the tree.
-    fn borrow_node(&self, idx: usize) -> &Node<G> {
-        &self.arena[idx]
-    }
-
-    /// Borrow a `Node` from the tree mutably.
-    fn borrow_node_mut(&mut self, idx: usize) -> &mut Node<G> {
-        &mut self.arena[idx]
-    }
-
-    /// Explore the game tree.
-    fn select(&self) -> usize {
-        let mut node = &self.arena[self.root]; // start at the root
-
-        // Loop until `node` has no children
-        while !node.children.is_empty() {
-            // Get the child with the highest initiative
-            node = &self.arena[node.children[0]];
-            for child in node.children.iter() {
-                let child = &self.arena[*child];
-                if child.initiative > node.initiative {
-                    node = &child;
-                }
-            }
-        }
-
-        node.idx
-    }
-
-    /// Expand a node to create children in the game tree.
-    fn expand(&mut self, idx: usize) {
-        // Iterate through actions to create children
-        for action in self.arena[idx].state.turns() {
-            // Clone state and play action
-            let mut state: G = *self.arena[idx].state.clone();
-            state.play(action.clone());
-
-            // Add the new child
-            self.arena.push(Node::new(
-                self.arena.len(),
-                idx,
-                Box::new(state),
-                Some(action),
-            ));
-            // Parent stores index of child
-            let child = self.arena.last().unwrap().idx;
-            self.arena[idx].children.push(child);
-        }
-    }
-
-    /// Backpropagate the result of a simulation.
-    fn backpropagate(&mut self, mut idx: usize, winner: Option<G::Player>, round: usize) {
-        // Backpropagate until the root
-        while idx != 0 {
-            let node = &mut self.arena[idx];
-
-            // Update statistics of node
-            if Some(node.state.player()) == winner {
-                node.wins += 1;
-            }
-            node.sims += 1;
-
-            // Update this node's initiative
-            node.update_initiative(round);
-
-            // Ascend to parent
-            idx = node.parent;
-        }
     }
 }
 
