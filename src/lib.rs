@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::fmt::{self, Display};
 use std::ops::{Index, IndexMut};
 
-use mcts::Mcts;
+use gamesweet::Game;
 
 /// Size of the game board.
 const BOARDSIZE: usize = 8;
@@ -19,16 +19,16 @@ pub struct Reversi {
 
 impl Reversi {
     /// Create a new Reversi game.
-    pub fn new() -> Reversi {
-        Reversi {
-            board: Board::<BOARDSIZE>::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
 impl Default for Reversi {
     fn default() -> Self {
-        Self::new()
+        Self {
+            board: Board::new(),
+        }
     }
 }
 
@@ -38,7 +38,7 @@ impl Display for Reversi {
     }
 }
 
-impl Mcts for Reversi {
+impl Game for Reversi {
     type Player = Player;
     type Turn = Turn;
 
@@ -84,7 +84,7 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
     ///
     /// The board starts with 4 pieces in the centre.
     /// The first player is always black.
-    fn new() -> Board<BOARDSIZE> {
+    fn new() -> Self {
         let mut squares = [[Square::Empty; BOARDSIZE]; BOARDSIZE];
 
         squares[BOARDSIZE / 2 - 1][BOARDSIZE / 2 - 1] = Square::Piece(Player::White);
@@ -92,7 +92,7 @@ impl<const BOARDSIZE: usize> Board<BOARDSIZE> {
         squares[BOARDSIZE / 2][BOARDSIZE / 2 - 1] = Square::Piece(Player::Black);
         squares[BOARDSIZE / 2][BOARDSIZE / 2] = Square::Piece(Player::White);
 
-        Board {
+        Self {
             squares,
             player: Player::Black,
         }
@@ -376,13 +376,12 @@ impl Display for Square {
     ///
     /// | Piece                   | Char |
     /// | ----------------------- | ---- |
-    /// | `Taken(Player::Black)`  | `●`  |
-    /// | `Taken(Player::White)`  | `○`  |
+    /// | `Piece(Player::Black)`  | `●`  |
+    /// | `Piece(Player::White)`  | `○`  |
     /// | `Empty`                 | ` `  |
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Square::Piece(Player::Black) => write!(f, "●"),
-            Square::Piece(Player::White) => write!(f, "○"),
+            Square::Piece(player) => write!(f, "{}", player),
             Square::Empty => write!(f, " "),
         }
     }
@@ -410,6 +409,19 @@ impl Player {
     }
 }
 
+impl Display for Player {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Player::Black => "●",
+                Player::White => "○",
+            }
+        )
+    }
+}
+
 /// A board position to play a piece.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Turn {
@@ -419,8 +431,8 @@ pub struct Turn {
 
 impl Turn {
     /// Create a new Turn.
-    pub fn new(player: Player, pos: Position) -> Turn {
-        Turn { player, pos }
+    pub fn new(player: Player, pos: Position) -> Self {
+        Self { player, pos }
     }
 }
 
@@ -539,10 +551,10 @@ mod tests {
     fn game_board_is_occupied_test() {
         let game = Reversi::new();
 
-        assert_eq!(game.board.is_occupied(Position(0, 0)), false);
-        assert_eq!(game.board.is_occupied(Position(2, 2)), false);
-        assert_eq!(game.board.is_occupied(Position(4, 4)), true);
-        assert_eq!(game.board.is_occupied(Position(6, 6)), false);
+        assert!(!game.board.is_occupied(Position(0, 0)));
+        assert!(!game.board.is_occupied(Position(2, 2)));
+        assert!(game.board.is_occupied(Position(4, 4)));
+        assert!(!game.board.is_occupied(Position(6, 6)));
     }
 
     #[test]

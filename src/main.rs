@@ -1,46 +1,43 @@
 use std::io::{self, Write};
 
-use mcts::Mcts;
-use reversi::*;
+use gamesweet::{ai, Config, Game, TurnFn};
+use reversi::{Player, Position, Reversi, Turn};
 
 fn main() {
-    println!("Welcome to Reversi!");
-    println!();
+    // Initialize logger
+    env_logger::Builder::new()
+        .default_format()
+        .format_indent(Some(12))
+        .format_timestamp(None)
+        .parse_default_env()
+        .init();
 
-    let mut game = Reversi::new();
-    let mut success = true;
+    // Create a Reversi game
+    let game = Reversi::new();
 
-    while !game.over() {
-        if success {
-            println!("{}", game);
+    // Define the game config
+    let p1 = (Player::Black, ask_human as TurnFn<Reversi>);
+    let p2 = (Player::White, ai::mcts::run as TurnFn<Reversi>);
+    let config = Config::new(p1, p2);
 
-            println!("Available turns:");
-            for turn in game.turns() {
-                println!("{}", turn);
-            }
-        } else {
-            println!("error: could not play turn");
-        }
-
-        let turn = match game.player() {
-            Player::Black => get_turn(game.player()),
-            Player::White => game.mcts(),
-        };
-
-        success = game.play(turn);
-    }
-
-    println!("{}", game);
-    match game.winner() {
-        Some(player) => println!("Winner: {:?}", player),
-        None => println!("It's a tie!"),
-    }
+    // Run the game loop
+    game.main(config);
 }
 
-fn get_turn(player: Player) -> Turn {
+fn ask_human(game: &Reversi) -> Turn {
+    // Print available turns
+    println!("Available turns:");
+    for turn in game.turns() {
+        println!("{}", turn);
+    }
+
+    // Query the game for the player
+    let player = Game::player(game);
+
+    // Loop until user provides a valid turn
     loop {
         // Print prompt
-        print!("[{:?}] >> ", &player);
+        print!("[{}] >> ", &player);
         io::stdout().flush().unwrap();
 
         // Get user input
