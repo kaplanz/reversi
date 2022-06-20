@@ -1,7 +1,6 @@
 [package]
 name = "reversi"
 version = "0.1.0"
-authors = ["Zakhary Kaplan <zakharykaplan@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/zakharykaplan/reversi"
 license = "MIT OR Apache-2.0"
