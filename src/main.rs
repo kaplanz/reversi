@@ -4,14 +4,6 @@ use gamesweet::{ai, Config, Game, TurnFn};
 use reversi::{Player, Position, Reversi, Turn};
 
 fn main() {
-    // Initialize logger
-    env_logger::Builder::new()
-        .default_format()
-        .format_indent(Some(12))
-        .format_timestamp(None)
-        .parse_default_env()
-        .init();
-
     // Create a Reversi game
     let game = Reversi::new();
 
